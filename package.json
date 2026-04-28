@@ -1,0 +1,103 @@
+{
+  "name": "haskell-notebook",
+  "displayName": "Haskell Notebook",
+  "description": "Interactive Haskell notebooks powered by GHCi",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.116.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Notebooks"
+  ],
+  "keywords": [
+    "haskell",
+    "notebook",
+    "ghci",
+    "notebookKernelHaskellNotebook"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "notebooks": [
+      {
+        "type": "haskell-notebook",
+        "displayName": "Haskell Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.ihsnb"
+          }
+        ]
+      }
+    ],
+    "languages": [
+      {
+        "id": "haskell",
+        "aliases": [
+          "Haskell",
+          "haskell"
+        ],
+        "extensions": [
+          ".hs"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "haskellNotebook.startGhci",
+        "title": "Haskell: Start GHCi",
+        "category": "Haskell Notebook"
+      },
+      {
+        "command": "haskellNotebook.restartGhci",
+        "title": "Haskell: Restart GHCi",
+        "category": "Haskell Notebook"
+      },
+      {
+        "command": "haskellNotebook.stopGhci",
+        "title": "Haskell: Stop GHCi",
+        "category": "Haskell Notebook"
+      }
+    ],
+    "configuration": {
+      "title": "Haskell Notebook",
+      "properties": {
+        "haskellNotebook.ghciPath": {
+          "type": "string",
+          "default": "ghci",
+          "description": "Path to the GHCi executable (defaults to 'ghci' on PATH)"
+        },
+        "haskellNotebook.timeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "Execution timeout per cell in milliseconds"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.116.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.56.1",
+    "eslint": "^9.39.3",
+    "typescript": "^5.9.3",
+    "ts-loader": "^9.5.4",
+    "webpack": "^5.105.3",
+    "webpack-cli": "^6.0.1",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
