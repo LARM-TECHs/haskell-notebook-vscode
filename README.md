@@ -1,71 +1,112 @@
-# haskell-notebook README
+# Haskell Notebook
 
-This is the README for your extension "haskell-notebook". After writing up a brief description, we recommend including the following sections.
+Interactive Haskell notebooks for VS Code, powered by GHCi — no Jupyter, no Python, no ZeroMQ required.
+
+![Haskell Notebook](images/icon.png)
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- **Run Haskell code** directly in notebook cells via GHCi
+- **Rich error formatting** — errors and warnings rendered with location, flag badges, and colour-coded severity
+- **Syntax highlighting** on cell outputs using the Haskell grammar
+- **Mixed cells** — declarations, type signatures, and expressions in the same cell
+- **Markdown cells** for documentation and notes
+- **Show Type** — query the type of any expression via `:t` with a persistent history
+- **Persistent outputs** — outputs are saved to disk and restored on reopen
+- **Native `.ihsnb` format** — compatible with the [HaskellNotebook desktop app](https://github.com/LARM-TECHs/Haskell-Notebook)
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- [Haskell Platform](https://www.haskell.org/platform/) 8.6.5 or later (`ghci` must be on your PATH)
+- VS Code 1.85.0 or later
 
-## Extension Settings
+To verify GHCi is available:
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+```
+ghci --version
+```
 
-For example:
+## Getting Started
 
-This extension contributes the following settings:
+1. Create a new file with the `.ihsnb` extension
+2. VS Code opens it as a Haskell Notebook automatically
+3. Add a code cell and press **Shift+Enter** to run it
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+GHCi starts automatically on first execution. The status bar shows the current GHCi state.
 
-## Known Issues
+## Usage
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+### Running cells
 
-## Release Notes
+Press **Shift+Enter** or click the ▶ button to run a cell. Multiple statements, type signatures, and expressions can coexist in a single cell:
 
-Users appreciate release notes as you update your extension.
+```haskell
+-- Type signature + definition are grouped automatically
+fib :: Int -> Int
+fib 0 = 0
+fib 1 = 1
+fib n = fib (n-1) + fib (n-2)
 
-### 1.0.0
+fib 10
+```
 
-Initial release of ...
+### Show Type
 
-### 1.0.1
+Click the **⟨T⟩** button in the cell toolbar (or run `Haskell: Show Type` from the Command Palette) to query the type of an expression. If text is selected in the cell editor, it is used as the expression automatically. Previous queries are saved and shown in a searchable history.
 
-Fixed issue #.
+### GHCi controls
 
-### 1.1.0
+| Command | Description |
+|---|---|
+| `Haskell: Start GHCi` | Start the GHCi process |
+| `Haskell: Restart GHCi` | Restart GHCi (clears all definitions) |
+| `Haskell: Stop GHCi` | Stop the GHCi process |
+| `Haskell: Clear Type Query History` | Clear the Show Type history |
 
-Added features X, Y, and Z.
+## Settings
 
----
+| Setting | Default | Description |
+|---|---|---|
+| `haskellNotebook.ghciPath` | `"ghci"` | Path to the GHCi executable |
+| `haskellNotebook.timeoutMs` | `30000` | Execution timeout per cell (ms) |
 
-## Following extension guidelines
+If GHCi is not on your PATH, set the full path in settings:
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+```json
+{
+  "haskellNotebook.ghciPath": "C:\\ghc\\bin\\ghci.exe"
+}
+```
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+## File Format
 
-## Working with Markdown
+Notebooks are saved as `.ihsnb` files — a JSON format compatible with the HaskellNotebook desktop app. The format is human-readable and version-controlled friendly.
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+```json
+{
+  "version": "1.0",
+  "metadata": { "ghcVersion": "8.6.5", ... },
+  "cells": [
+    {
+      "id": "cell-abc123",
+      "type": "code",
+      "source": "map (*2) [1..5]",
+      "output": { "type": "success", "value": "..." },
+      "executed": true,
+      "executionCount": 1,
+      "executionTimeMs": 12
+    }
+  ]
+}
+```
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+## Known Limitations
 
-## For more information
+- GHCi state is global — all cells share the same REPL session. Restarting GHCi clears all definitions.
+- `:load` and `:module` commands work but require absolute paths or files in the workspace.
+- Infinite loops require using **Restart GHCi** to recover (`Ctrl+Shift+P → Haskell: Restart GHCi`).
+- Autocompletion inside cells is provided by the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) if installed.
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+## License
 
-**Enjoy!**
+MIT — see [LICENSE](LICENSE)

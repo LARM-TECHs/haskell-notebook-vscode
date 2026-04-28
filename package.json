@@ -58,8 +58,28 @@
         "command": "haskellNotebook.stopGhci",
         "title": "Haskell: Stop GHCi",
         "category": "Haskell Notebook"
+      },
+      {
+        "command": "haskellNotebook.showType",
+        "title": "Show Type",
+        "category": "Haskell Notebook",
+        "icon": "$(symbol-type-parameter)"
+      },
+      {
+        "command": "haskellNotebook.clearTypeHistory",
+        "title": "Haskell: Clear Type Query History",
+        "category": "Haskell Notebook"
       }
     ],
+    "menus": {
+      "notebook/cell/title": [
+        {
+          "command": "haskellNotebook.showType",
+          "when": "notebookType == 'haskell-notebook' && notebookCellType == 'code'",
+          "group": "inline"
+        }
+      ]
+    },
     "configuration": {
       "title": "Haskell Notebook",
       "properties": {
@@ -75,7 +95,14 @@
           "description": "Execution timeout per cell in milliseconds"
         }
       }
-    }
+    },
+    "iconThemes": [
+      {
+        "id": "haskell-notebook-icons",
+        "label": "Haskell Notebook Icons",
+        "path": "./images/icon-theme.json"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -103,5 +130,10 @@
   },
   "dependencies": {
     "highlight.js": "^11.11.1"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LARM-TECHs/Haskell-Notebook"
+  },
+  "license": "MIT"
 }

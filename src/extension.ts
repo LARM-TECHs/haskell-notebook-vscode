@@ -10,6 +10,7 @@ import { GhciManager } from './GhciManager';
 import { GhciState } from './types';
 import { HaskellNotebookController } from './NotebookController';
 import { HaskellNotebookSerializer } from './NotebookSerializer';
+import { HistoryManager } from './HistoryManager';
 
 // Instancias globales (viven durante toda la sesión de VS Code)
 let ghci: GhciManager | null = null;
@@ -29,6 +30,9 @@ export function activate(context: vscode.ExtensionContext) {
 	// ── Instanciar núcleo ─────────────────────────────────────────────────────
 	ghci = new GhciManager(ghciPath, timeoutMs);
 	controller = new HaskellNotebookController(ghci);
+
+	// ── Historial persistente ─────────────────────────────────────────────────
+	const history = new HistoryManager(context.globalState);
 
 	// ── Status bar ────────────────────────────────────────────────────────────
 	const statusBar = vscode.window.createStatusBarItem(
@@ -57,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.registerNotebookSerializer(
 			'haskell-notebook',
 			new HaskellNotebookSerializer(),
-			{ transientOutputs: false },   // persistir outputs al guardar
+			{ transientOutputs: false },
 		),
 	);
 
@@ -99,6 +103,48 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage('GHCi detenido.');
 		}),
 
+		// ── Show Type (:t <expr>) ────────────────────────────────────────────────
+		vscode.commands.registerCommand('haskellNotebook.showType', async () => {
+			if (!ghci) return;
+
+			if (ghci.getState() === 'disconnected' || ghci.getState() === 'error') {
+				vscode.window.showErrorMessage('GHCi no está iniciado. Ejecuta una celda primero.');
+				return;
+			}
+
+			// 1. Intentar usar el texto seleccionado en el editor activo
+			const editor = vscode.window.activeTextEditor;
+			const selection = editor?.selection;
+			const selected = (editor && selection && !selection.isEmpty)
+				? editor.document.getText(selection).trim()
+				: '';
+
+			// 2. QuickPick con historial persistente
+			const expr = await pickExpression(selected, history);
+			if (!expr) return;
+
+			// 3. Guardar en historial
+			history.add(expr);
+
+			// 4. Ejecutar :t <expr>
+			const result = await ghci.sendCommand(`:t ${expr}`);
+
+			if (result.kind === 'success' || result.kind === 'error') {
+				vscode.window.showInformationMessage(
+					result.output || `${expr} :: ?`,
+					{ modal: false },
+				);
+			} else if (result.kind === 'timeout') {
+				vscode.window.showErrorMessage('Timeout al consultar el tipo.');
+			}
+		}),
+
+		// ── Borrar historial ─────────────────────────────────────────────────────
+		vscode.commands.registerCommand('haskellNotebook.clearTypeHistory', () => {
+			history.clear();
+			vscode.window.showInformationMessage('Historial de tipos borrado.');
+		}),
+
 	);
 
 	// ── Cleanup al deactivate ─────────────────────────────────────────────────
@@ -115,6 +161,43 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
 	ghci?.stop();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// QUICK PICK CON HISTORIAL
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Muestra un QuickPick con el historial de expresiones.
+ * Si `prefill` no está vacío, lo pone como valor inicial.
+ * Devuelve la expresión elegida o vacío si el usuario cancela.
+ */
+function pickExpression(prefill: string, history: HistoryManager): Promise<string> {
+	return new Promise(resolve => {
+		const qp = vscode.window.createQuickPick();
+		qp.title = 'Show Type — :t';
+		qp.placeholder = 'Escribe una expresión Haskell o elige del historial';
+		qp.value = prefill;
+		qp.canSelectMany = false;
+
+		const toItems = (filter: string) =>
+			history.getAll()
+				.filter(e => !filter || e.toLowerCase().includes(filter.toLowerCase()))
+				.map(e => ({ label: e }));
+
+		qp.items = toItems(prefill);
+
+		qp.onDidChangeValue(v => { qp.items = toItems(v); });
+
+		qp.onDidAccept(() => {
+			const value = qp.selectedItems[0]?.label ?? qp.value;
+			qp.hide();
+			resolve(value.trim());
+		});
+
+		qp.onDidHide(() => resolve(''));
+		qp.show();
+	});
 }
 
 // ════════════════════════════════════════════════════════════════════════════

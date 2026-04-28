@@ -173,7 +173,7 @@ function renderError(e: ParsedGhciError): string {
         : '';
 
     return `
-<div style="
+<div data-ghci-kind="error" style="
   margin:4px 0;
   border:1px solid ${c.border};
   border-left:3px solid ${c.badge};

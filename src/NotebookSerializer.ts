@@ -23,11 +23,8 @@ export class HaskellNotebookSerializer implements vscode.NotebookSerializer {
 
         let file: IHSnbFile;
         try {
-            file = text.trim()
-                ? JSON.parse(text)
-                : this.emptyFile();
+            file = text.trim() ? JSON.parse(text) : this.emptyFile();
         } catch {
-            // JSON inválido → notebook vacío para no bloquear al usuario
             file = this.emptyFile();
         }
 
@@ -40,15 +37,16 @@ export class HaskellNotebookSerializer implements vscode.NotebookSerializer {
                 c.type === 'code' ? 'haskell' : 'markdown',
             );
 
-            // Restaurar output de la sesión anterior si existe
+            // Restaurar output con el mimetype correcto (text/html)
+            // El valor almacenado es siempre HTML generado por los formatters
             if (c.executed && c.output.value) {
-                const item = c.output.type === 'error'
-                    ? vscode.NotebookCellOutputItem.stderr(c.output.value)
-                    : vscode.NotebookCellOutputItem.text(c.output.value);
+                const item = vscode.NotebookCellOutputItem.text(
+                    c.output.value,
+                    'text/html',
+                );
                 cell.outputs = [new vscode.NotebookCellOutput([item])];
             }
 
-            // Metadatos de runtime (no se muestran en la UI, pero se preservan)
             cell.metadata = {
                 id: c.id,
                 executionCount: c.executionCount,
@@ -75,10 +73,10 @@ export class HaskellNotebookSerializer implements vscode.NotebookSerializer {
         const cells: IHSnbCell[] = data.cells.map((c, i) => {
             const output = c.outputs?.[0];
             const outItem = output?.items?.[0];
-            const outText = outItem
-                ? new TextDecoder().decode(outItem.data)
-                : '';
-            const isError = outItem?.mime === 'application/vnd.code.notebook.stderr';
+            const outText = outItem ? new TextDecoder().decode(outItem.data) : '';
+
+            // Detectar errores por el marcador data-ghci-kind="error" en el HTML
+            const isError = outText.includes('data-ghci-kind="error"');
 
             return {
                 id: c.metadata?.id ?? `cell-${i}-${Date.now()}`,
@@ -96,11 +94,7 @@ export class HaskellNotebookSerializer implements vscode.NotebookSerializer {
 
         const file: IHSnbFile = {
             version: '1.0',
-            metadata: {
-                ghcVersion: '8.6.5',
-                created: now,
-                modified: now,
-            },
+            metadata: { ghcVersion: '8.6.5', created: now, modified: now },
             cells,
         };
 

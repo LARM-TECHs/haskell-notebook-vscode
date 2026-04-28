@@ -1,11 +1,10 @@
 {
-    "iconDefinitions": {
-        "_ihsnb": {
-            "iconPath": "./icon-file.png"
-        }
-    },
-    "fileExtensions": {
-        "ihsnb": "_ihsnb"
-    },
-    "file": "_ihsnb"
+  "iconDefinitions": {
+    "_ihsnb": {
+      "iconPath": "./ihsnb-file.svg"
+    }
+  },
+  "fileExtensions": {
+    "ihsnb": "_ihsnb"
+  }
 }

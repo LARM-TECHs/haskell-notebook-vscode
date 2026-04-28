@@ -1,0 +1,17 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Notebook body -->
+  <rect x="4" y="2" width="16" height="20" rx="2" fill="#F8F9FA" stroke="#453A62" stroke-width="1.5"/>
+
+  <!-- Spiral binding lines -->
+  <path d="M4 5H6M4 8.5H6M4 12H6M4 15.5H6M4 19H6" stroke="#453A62" stroke-width="1" stroke-linecap="round"/>
+
+  <!-- Haskell lambda mark (simplified, centered lower half) -->
+  <g transform="translate(8, 11) scale(0.52)">
+    <path fill="#453a62" d="M 0 12 L 4 6 L 0 0 L 3 0 L 7 6 L 3 12 Z"/>
+    <path fill="#5e5086" d="M 4 12 L 8 6 L 4 0 L 7 0 L 15 12 L 12 12 L 9.5 8.25 L 7 12 Z"/>
+    <path fill="#8f4e8b" d="M 13.66 8.5 L 12.333 6.5 L 17 6.5 L 17 8.5 Z M 11.666 5.5 L 10.333 3.5 L 17 3.5 L 17 5.5 Z"/>
+  </g>
+
+  <!-- Top placeholder bar -->
+  <rect x="7" y="4.5" width="10" height="3" rx="0.5" fill="#E9ECEF" stroke="#CED4DA" stroke-width="0.5"/>
+</svg>
