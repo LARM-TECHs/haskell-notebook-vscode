@@ -9,7 +9,8 @@
 //   2. Para ejecutar código: se envía el código por stdin y se espera a que
 //      onData() detecte el prompt en stdout → resuelve la Promise pendiente.
 //   3. stderr se redirige a stdout para simplificar la lectura.
-//   4. Código multilínea se envuelve en :{ ... :} para que GHCi lo acepte.
+//   4. Código multilínea: si hay líneas indentadas se envuelve en :{ :};
+//      si son sentencias independientes se envían una a una.
 //   5. Una cola FIFO garantiza que solo un comando se ejecuta a la vez.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -132,7 +133,7 @@ export class GhciManager extends EventEmitter {
     // EJECUCIÓN DE CÓDIGO
     // ════════════════════════════════════════════════════════════════════════
 
-    /** Ejecuta un bloque de código Haskell (envuelve multilínea en :{ :}). */
+    /** Ejecuta un bloque de código Haskell. */
     execute(code: string): Promise<GhciResult> {
         return this.enqueue(() => this.doExecute(code));
     }
@@ -168,14 +169,31 @@ export class GhciManager extends EventEmitter {
         this.setState('busy');
 
         try {
-            this.outputBuf = '';
-            const lines = this.prepareCode(code.trim());
-            lines.forEach(l => this.sendRaw(l));
+            // prepareCode devuelve un array de bloques; cada bloque es un array de
+            // líneas que se envían juntas y producen UN solo prompt de respuesta.
+            const blocks = this.prepareCode(code.trim());
+            const outputs: string[] = [];
 
-            const output = await this.awaitPrompt(this.timeoutMs);
+            for (const block of blocks) {
+                this.outputBuf = '';
+                block.forEach(l => this.sendRaw(l));
+
+                const output = await this.awaitPrompt(this.timeoutMs);
+
+                // Parar en el primer error
+                const interim = this.classifyOutput(output, Date.now() - startMs);
+                if (interim.kind === 'error') {
+                    this.setState('ready');
+                    return interim;
+                }
+
+                if (output) { outputs.push(output); }
+            }
+
             const elapsed = Date.now() - startMs;
             this.setState('ready');
-            return this.classifyOutput(output, elapsed);
+            const combined = outputs.filter(Boolean).join('\n').trimEnd();
+            return { kind: 'success', output: combined, timeMs: elapsed };
 
         } catch {
             this.setState('ready');
@@ -266,16 +284,99 @@ export class GhciManager extends EventEmitter {
     }
 
     /**
-     * Prepara el código para GHCi:
-     * - Línea única                    → se envía tal cual
-     * - Multilínea con comandos ':'    → se envía línea a línea
-     * - Multilínea sin comandos        → se envuelve en :{ ... :}
+     * Prepara el código para GHCi y devuelve un array de "bloques".
+     * Cada bloque es un array de líneas que se envían juntas y generan
+     * exactamente UN prompt de respuesta.
+     *
+     * Reglas:
+     *  - Línea única              → [[línea]]
+     *  - Empieza con ':'          → cada línea es su propio bloque
+     *  - Tiene líneas indentadas  → un solo bloque envuelto en :{ :}
+     *    (continuaciones: where, do, let, guards, etc.)
+     *  - Resto (sentencias        → cada línea no-vacía es su propio bloque
+     *    independientes sin       (evita el parse error de mezclar
+     *    indentación)              declaraciones y expresiones en :{ :})
      */
-    private prepareCode(code: string): string[] {
+    private prepareCode(code: string): string[][] {
         const lines = code.split('\n');
-        if (lines.length === 1) return [code];
-        if (code.trimStart().startsWith(':')) return lines;
-        return [':{', ...lines, ':}'];
+
+        // Línea única — caso más común
+        if (lines.length === 1) {
+            return [[code]];
+        }
+
+        // Comandos GHCi (:load, :type, etc.) — cada línea por separado
+        if (code.trimStart().startsWith(':')) {
+            return lines.filter(l => l.trim()).map(l => [l]);
+        }
+
+        // Si alguna línea (distinta de la primera) está indentada, es un bloque
+        // multilínea real (where, do, guards…) → envolver en :{ :}
+        const hasIndentation = lines.slice(1).some(l => /^\s+\S/.test(l));
+        if (hasIndentation) {
+            return [[':{', ...lines, ':}']];
+        }
+
+        // Sentencias independientes sin indentación → agrupar y enviar una a una.
+        //
+        // Problema: `name :: Type` enviado solo al REPL se interpreta como
+        // una EXPRESIÓN con anotación de tipo (no como declaración), lo que
+        // hace que GHCi evalúe `name` y lo imprima antes de tiempo.
+        //
+        // Solución: detectar firmas de tipo y agruparlas con todas las
+        // ecuaciones que les siguen en un bloque :{ :}.
+        const nonEmpty = lines.filter(l => l.trim() && !l.trimStart().startsWith('--'));
+        const blocks: string[][] = [];
+        let i = 0;
+
+        while (i < nonEmpty.length) {
+            const line = nonEmpty[i];
+            const typeSigName = this.extractTypeSigName(line);
+
+            if (typeSigName !== null) {
+                // Recoger la firma + todas las ecuaciones del mismo nombre
+                const group = [line];
+                let j = i + 1;
+                while (j < nonEmpty.length &&
+                    this.isDefinitionOf(nonEmpty[j], typeSigName)) {
+                    group.push(nonEmpty[j]);
+                    j++;
+                }
+                if (group.length > 1) {
+                    // Firma + al menos una ecuación → bloque :{ :}
+                    blocks.push([':{', ...group, ':}']);
+                } else {
+                    // Firma sin definición (raro) → línea suelta
+                    blocks.push([line]);
+                }
+                i = j;
+            } else {
+                blocks.push([line]);
+                i++;
+            }
+        }
+
+        return blocks;
+    }
+
+    /**
+     * Si la línea es una firma de tipo (`name :: ...`), devuelve `name`.
+     * En caso contrario devuelve null.
+     */
+    private extractTypeSigName(line: string): string | null {
+        const m = line.match(/^([a-z_][\w']*|\([^)]+\))\s*::/);
+        return m ? m[1] : null;
+    }
+
+    /**
+     * Devuelve true si `line` es una ecuación para `name`
+     * (empieza con `name` seguido de `=`, un patrón, o un guard `|`).
+     */
+    private isDefinitionOf(line: string, name: string): boolean {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // La línea debe empezar con `name` Y contener `=` (definición).
+        // Así excluimos aplicaciones como `double 21` que no son definiciones.
+        return new RegExp(`^${escaped}(\\s|=|\\|)`).test(line) && line.includes('=');
     }
 
     /**

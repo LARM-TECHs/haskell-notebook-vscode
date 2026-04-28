@@ -2,12 +2,13 @@
 // NOTEBOOK CONTROLLER
 //
 // Conecta la VS Code Notebook API con GhciManager.
-// Equivale a la lógica de ejecución de NotebookViewModel.kt.
 // ════════════════════════════════════════════════════════════════════════════
 
 import * as vscode from 'vscode';
 import { GhciManager } from './GhciManager';
 import { GhciResult } from './types';
+import { formatGhciError } from './GhciErrorFormatter';
+import { formatGhciOutput } from './GhciOutputFormatter';
 
 export class HaskellNotebookController {
 
@@ -16,9 +17,9 @@ export class HaskellNotebookController {
 
     constructor(private readonly ghci: GhciManager) {
         this.controller = vscode.notebooks.createNotebookController(
-            'haskell-notebook-kernel',   // id único
-            'haskell-notebook',          // notebookType — debe coincidir con package.json
-            'GHCi 8.6.5',                // label visible al usuario
+            'haskell-notebook-kernel',
+            'haskell-notebook',
+            'GHCi 8.6.5',
         );
 
         this.controller.supportedLanguages = ['haskell'];
@@ -37,7 +38,6 @@ export class HaskellNotebookController {
         _ctrl: vscode.NotebookController,
     ): Promise<void> {
 
-        // Asegurar que GHCi está activo antes de ejecutar cualquier celda
         if (this.ghci.getState() === 'disconnected' ||
             this.ghci.getState() === 'error') {
             try {
@@ -55,8 +55,6 @@ export class HaskellNotebookController {
             }
         }
 
-        // Ejecutar cada celda en orden
-        // GhciManager ya serializa internamente vía execQueue
         for (const cell of cells) {
             await this.executeCell(cell);
         }
@@ -92,23 +90,18 @@ export class HaskellNotebookController {
         switch (result.kind) {
 
             case 'success': {
-                const items: vscode.NotebookCellOutputItem[] = [
-                    vscode.NotebookCellOutputItem.text(result.output),
-                ];
-
-                // Rich output HTML (fase 2: añadir syntax highlighting aquí)
-                // items.push(vscode.NotebookCellOutputItem.text(
-                //   toHtml(result.output), 'text/html'
-                // ));
-
-                await exec.appendOutput(new vscode.NotebookCellOutput(items));
+                const html = formatGhciOutput(result.output);
+                await exec.appendOutput(new vscode.NotebookCellOutput([
+                    vscode.NotebookCellOutputItem.text(html || result.output, 'text/html'),
+                ]));
                 exec.end(true, Date.now());
                 break;
             }
 
             case 'error': {
+                const html = formatGhciError(result.output);
                 await exec.appendOutput(new vscode.NotebookCellOutput([
-                    vscode.NotebookCellOutputItem.stderr(result.output),
+                    vscode.NotebookCellOutputItem.text(html, 'text/html'),
                 ]));
                 exec.end(false, Date.now());
                 break;
@@ -134,8 +127,9 @@ export class HaskellNotebookController {
         exec: vscode.NotebookCellExecution,
         msg: string,
     ): Promise<void> {
+        const html = formatGhciError(msg);
         await exec.appendOutput(new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.stderr(msg),
+            vscode.NotebookCellOutputItem.text(html, 'text/html'),
         ]));
         exec.end(false, Date.now());
     }
